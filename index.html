@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pre-Tax Income Calculator (Multi-Jurisdiction)</title>
+    <title>Pre-Tax Income Calculator (Auto-Formatting Input)</title>
     <style>
+      /* Styles are largely the same, maybe ensure input alignment */
       body {
         font-family: sans-serif;
         padding: 20px;
@@ -12,10 +13,11 @@
         background-color: #f0f0f0;
       }
       .container {
-        max-width: 650px; /* Wider for dropdowns and info */
+        max-width: 650px;
         margin: 20px auto;
         padding: 25px;
         border: 1px solid #ccc;
+        border-radius: 8px;
         background-color: #ffffff;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
@@ -24,30 +26,30 @@
         margin-bottom: 5px;
         font-weight: bold;
       }
+      /* Ensure text aligns right for easier number reading */
+      input[type="text"] {
+        text-align: right;
+      }
       input[type="text"],
       select {
-        /* Style select dropdown */
-        width: 100%; /* Full width */
+        width: 100%;
         padding: 10px;
         margin-bottom: 15px;
         border: 1px solid #ccc;
-        border-radius: 0.5rem;
+        border-radius: 4px;
         font-size: 1em;
-        box-sizing: border-box; /* Include padding in width */
+        box-sizing: border-box;
       }
       button {
         padding: 10px 20px;
         background-color: #007bff;
         color: white;
         border: none;
-        border-radius: 0.5rem;
+        border-radius: 4px;
         cursor: pointer;
         font-size: 1em;
         transition: background-color 0.2s ease;
-        margin-top: 5px; /* Space above button */
-      }
-      input {
-        border-radius: 0.5rem;
+        margin-top: 5px;
       }
       button:hover {
         background-color: #0056b3;
@@ -55,9 +57,9 @@
       #result,
       #error,
       .disclaimer {
-        /* Style disclaimer */
         margin-top: 20px;
         padding: 12px;
+        border-radius: 4px;
         border: 1px solid transparent;
       }
       #result:empty,
@@ -78,12 +80,11 @@
         font-weight: bold;
       }
       .disclaimer {
-        /* Specific disclaimer style */
         background-color: #fff3cd;
         border-color: #ffeeba;
         color: #856404;
         font-size: 0.9em;
-        margin-bottom: 15px; /* Space below disclaimer */
+        margin-bottom: 15px;
       }
       details {
         margin-top: 25px;
@@ -99,11 +100,11 @@
       }
       #calculationSteps,
       #currentBracketsDisplay {
-        /* Style bracket display area */
         margin-top: 15px;
         padding: 10px;
         background-color: #f8f9fa;
         border: 1px solid #dee2e6;
+        border-radius: 4px;
       }
       #calculationSteps h4,
       #currentBracketsDisplay h4 {
@@ -130,9 +131,8 @@
         font-weight: bold;
         color: #b30000;
       }
-      /* Input label currency symbol */
       .currency-symbol {
-        font-weight: normal; /* Make symbol normal weight */
+        font-weight: normal;
         color: #555;
       }
     </style>
@@ -141,8 +141,9 @@
     <div class="container">
       <h1>Pre-Tax Income Calculator</h1>
       <p>
-        Select a tax system, enter your desired income *after* taxes in the
-        local currency, and calculate the required *pre-tax* income.
+        Select a tax system, enter your desired income *after* taxes (numbers
+        will be formatted automatically), and calculate the required *pre-tax*
+        income.
       </p>
 
       <div class="disclaimer">
@@ -184,8 +185,7 @@
           type="text"
           id="targetAfterTaxIncomeInput"
           inputmode="numeric"
-          pattern="[0-9]*"
-          placeholder="e.g., 100000000"
+          placeholder="e.g., 100.000.000"
         />
       </div>
 
@@ -196,9 +196,7 @@
 
       <details id="detailsSection">
         <summary>Calculation Details &amp; Tax Brackets Used</summary>
-
         <div id="calculationSteps"></div>
-
         <div id="currentBracketsDisplay">
           <h4>Tax Brackets Used (Reference):</h4>
           <ul id="bracketList"></ul>
@@ -209,167 +207,132 @@
     <script>
       console.log("Script tag executing...");
 
-      // --- Tax System Data ---
+      // --- Tax System Data (same as before) ---
       const taxBracketSystems = {
         ID: {
           name: "Indonesia (PPh 21 - Personal)",
           currency: "IDR",
-          // Source: UU HPP No 7 Tahun 2021 (effective 2022) - Check for updates post-2025
+          locale: "id-ID",
           brackets: [
-            { limit: 60000000, rate: 0.05 }, // 0 - 60jt
-            { limit: 250000000, rate: 0.15 }, // >60jt - 250jt
-            { limit: 500000000, rate: 0.25 }, // >250jt - 500jt
-            { limit: 5000000000, rate: 0.3 }, // >500jt - 5M
-            { limit: Infinity, rate: 0.35 }, // >5M
+            { limit: 60000000, rate: 0.05 },
+            { limit: 250000000, rate: 0.15 },
+            { limit: 500000000, rate: 0.25 },
+            { limit: 5000000000, rate: 0.3 },
+            { limit: Infinity, rate: 0.35 },
           ],
         },
         US: {
           name: "USA (Federal Income Tax - Single Filer 2024)",
           currency: "USD",
-          // Source: IRS Rev. Proc. 2023-34 (2024 rates for Single filer) - Ignores deductions/credits.
+          locale: "en-US",
           brackets: [
-            { limit: 11600, rate: 0.1 }, // 0 - $11,600
-            { limit: 47150, rate: 0.12 }, // $11,601 - $47,150
-            { limit: 100525, rate: 0.22 }, // $47,151 - $100,525
-            { limit: 191950, rate: 0.24 }, // $100,526 - $191,950
-            { limit: 243725, rate: 0.32 }, // $191,951 - $243,725
-            { limit: 609350, rate: 0.35 }, // $243,726 - $609,350
-            { limit: Infinity, rate: 0.37 }, // > $609,350
+            { limit: 11600, rate: 0.1 },
+            { limit: 47150, rate: 0.12 },
+            { limit: 100525, rate: 0.22 },
+            { limit: 191950, rate: 0.24 },
+            { limit: 243725, rate: 0.32 },
+            { limit: 609350, rate: 0.35 },
+            { limit: Infinity, rate: 0.37 },
           ],
         },
       };
 
-      // --- Helper Function for Formatting (Scope: Global within script) ---
-      let currentFormatter = new Intl.NumberFormat("id-ID", {
+      // --- Formatters ---
+      // For displaying final currency results and steps
+      let currentResultFormatter = new Intl.NumberFormat("id-ID", {
         style: "currency",
         currency: "IDR",
       });
+      // For formatting the input field value (no currency, no decimals)
+      let currentInputFormatter = new Intl.NumberFormat("id-ID", {
+        style: "decimal",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
 
-      // Function to update the formatter based on selection
-      function updateFormatter(currencyCode) {
-        const locale = currencyCode === "IDR" ? "id-ID" : "en-US"; // Basic locale mapping
-        currentFormatter = new Intl.NumberFormat(locale, {
+      // Function to update formatters based on selection
+      function updateFormatters(currencyCode, locale) {
+        currentResultFormatter = new Intl.NumberFormat(locale, {
           style: "currency",
           currency: currencyCode,
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         });
-        console.log(`Formatter updated for ${currencyCode}`);
+        currentInputFormatter = new Intl.NumberFormat(locale, {
+          style: "decimal",
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
+        console.log(`Formatters updated for ${currencyCode} (${locale})`);
       }
 
-      // --- The Calculation Function (accepts system object) ---
+      // --- Calculation Function (calculatePreTaxIncome - unchanged from previous version) ---
+      // function calculatePreTaxIncome(targetAfterTaxIncome, selectedBracketSystem) { ... }
+      // (Keep the function definition from the previous step exactly the same)
       function calculatePreTaxIncome(
         targetAfterTaxIncome,
         selectedBracketSystem
       ) {
         const calculationSteps = [];
         const functionStartTime = Date.now();
-
-        // Use brackets from the selected system
         const brackets = selectedBracketSystem.brackets;
-        if (!brackets || brackets.length === 0) {
-          return {
-            result: NaN,
-            steps: [],
-            error: "No brackets defined for the selected system.",
-          };
-        }
-
-        // --- Input Validation ---
+        if (!brackets || brackets.length === 0)
+          return { result: NaN, steps: [], error: "No brackets defined." };
         if (
           typeof targetAfterTaxIncome !== "number" ||
           targetAfterTaxIncome < 0 ||
           !isFinite(targetAfterTaxIncome)
-        ) {
-          console.error("Validation Error:", targetAfterTaxIncome);
-          return {
-            result: NaN,
-            steps: [],
-            error: "Invalid input: Must be a non-negative number.",
-          };
-        }
-
+        )
+          return { result: NaN, steps: [], error: "Invalid input." };
         calculationSteps.push({
           type: "start",
           target: targetAfterTaxIncome,
           system: selectedBracketSystem.name,
         });
-
         if (targetAfterTaxIncome === 0) {
           calculationSteps.push({ type: "result", preTax: 0 });
           return { result: 0, steps: calculationSteps };
         }
-
-        let preTaxIncome = 0;
-        let previousLimit = 0;
-        let remainingAfterTax = targetAfterTaxIncome;
-
-        // --- Iteration through Brackets ---
+        let preTaxIncome = 0,
+          previousLimit = 0,
+          remainingAfterTax = targetAfterTaxIncome;
         for (let i = 0; i < brackets.length; i++) {
           const bracket = brackets[i];
           const { limit, rate } = bracket;
           const netRate = 1 - rate;
-
           const bracketRange = limit - previousLimit;
-          if (bracketRange < 0 && limit !== Infinity) {
-            // Allow 0 range if limit is infinity (edge case unlikely)
-            console.warn("Skipping invalid bracket range:", bracket);
-            continue;
-          }
-          // Prevent division by zero if rate is 100%
-          if (netRate <= 0) {
-            console.error(
-              "Error: Tax rate of 100% or more detected in bracket:",
-              bracket
-            );
+          if (bracketRange < 0 && limit !== Infinity) continue;
+          if (netRate <= 0)
             return {
               result: NaN,
               steps: calculationSteps,
-              error: `Invalid tax rate (${rate * 100}%) in bracket ${i + 1}.`,
+              error: `Invalid rate (${rate * 100}%)`,
             };
-          }
-
           const bracketNetContribution =
             limit === Infinity ? Infinity : bracketRange * netRate;
-
           const stepData = {
             type: "bracket_calculation",
             bracketIndex: i + 1,
             lowerBound: previousLimit,
             upperBound: limit,
-            rate: rate,
-            netRate: netRate,
+            rate,
+            netRate,
             remainingBefore: remainingAfterTax,
           };
-
-          // --- Check if remaining target fits within this bracket ---
           if (
             remainingAfterTax <= bracketNetContribution + 1e-9 ||
             limit === Infinity
           ) {
-            // Add tolerance for float
             const preTaxNeededInThisBracket = remainingAfterTax / netRate;
-
             if (
               !isFinite(preTaxNeededInThisBracket) ||
               preTaxNeededInThisBracket < 0
-            ) {
-              // Also check < 0
-              console.error(
-                "Calculation Error: Invalid pre-tax needed in final bracket.",
-                { remainingAfterTax, netRate }
-              );
-              calculationSteps.push({
-                ...stepData,
-                error: "Division error or negative result in final step",
-              });
+            )
               return {
                 result: NaN,
                 steps: calculationSteps,
-                error: "Calculation error in final bracket.",
+                error: "Calc error final bracket.",
               };
-            }
-
             preTaxIncome += preTaxNeededInThisBracket;
             stepData.isFinalStep = true;
             stepData.preTaxAdded = preTaxNeededInThisBracket;
@@ -377,10 +340,9 @@
             stepData.cumulativePreTax = preTaxIncome;
             calculationSteps.push(stepData);
             calculationSteps.push({ type: "result", preTax: preTaxIncome });
-            console.log(`Calculation took ${Date.now() - functionStartTime}ms`);
+            console.log(`Calc took ${Date.now() - functionStartTime}ms`);
             return { result: preTaxIncome, steps: calculationSteps };
           } else {
-            // Full bracket used
             preTaxIncome += bracketRange;
             remainingAfterTax -= bracketNetContribution;
             stepData.isFinalStep = false;
@@ -390,23 +352,15 @@
             stepData.cumulativePreTax = preTaxIncome;
             calculationSteps.push(stepData);
             previousLimit = limit;
-
-            if (remainingAfterTax < -1e-9) {
-              console.warn(
-                "Remaining after-tax slightly negative:",
-                remainingAfterTax
-              );
+            if (remainingAfterTax < -1e-9)
               calculationSteps.push({
                 type: "warning",
-                message:
-                  "Remaining target slightly negative (float precision).",
+                message: "Remaining negative (precision).",
               });
-            }
           }
-        } // End for loop
-
+        }
         console.error(
-          "Calculation Error: Loop finished unexpectedly.",
+          "Calc Error: Loop finished unexpectedly.",
           remainingAfterTax
         );
         calculationSteps.push({
@@ -416,21 +370,21 @@
         return {
           result: NaN,
           steps: calculationSteps,
-          error: "Calculation failed unexpectedly after loop.",
+          error: "Calculation failed after loop.",
         };
       }
 
-      // --- Format Steps Array into HTML ---
+      // --- Format Steps Function (formatCalculationSteps - unchanged from previous version) ---
+      // function formatCalculationSteps(steps, targetAfterTaxIncome, formatter) { ... }
+      // (Keep the function definition from the previous step exactly the same)
       function formatCalculationSteps(steps, targetAfterTaxIncome, formatter) {
         if (!steps || steps.length === 0) return "";
         const startStep = steps.find((s) => s.type === "start");
         const systemName = startStep ? startStep.system : "Selected System";
-
         let html = `<h4>Calculation Breakdown (${systemName} - Target: ${formatter.format(
           targetAfterTaxIncome
         )} After Tax):</h4><ul>`;
         let currentCumulativePreTax = 0;
-
         steps.forEach((step) => {
           if (step.type === "start" || step.type === "result") return;
           if (step.type === "warning" || step.type === "error") {
@@ -439,11 +393,10 @@
             }</li>`;
             return;
           }
-
           if (step.type === "bracket_calculation") {
             const lowerDisplay = formatter
               .format(step.lowerBound + (step.lowerBound === 0 ? 0 : 0.01))
-              .replace(/\.00$/, ""); // Clean up display
+              .replace(/\.00$/, "");
             const upperDisplay =
               step.upperBound === Infinity
                 ? "Infinity"
@@ -453,14 +406,11 @@
                 ? `&gt; ${lowerDisplay}`
                 : `${lowerDisplay} - ${upperDisplay}`;
             const ratePercent =
-              (step.rate * 100).toFixed(1).replace(/\.0$/, "") + "%"; // Show decimal if needed
-
-            html += `<li><strong>Bracket ${step.bracketIndex} (${bracketDesc} @ <span class="rate-percent">${ratePercent}</span>):</strong>`;
-            html += `<ul>`;
+              (step.rate * 100).toFixed(1).replace(/\.0$/, "") + "%";
+            html += `<li><strong>Bracket ${step.bracketIndex} (${bracketDesc} @ <span class="rate-percent">${ratePercent}</span>):</strong><ul>`;
             html += `<li>After-tax needed at start: <span class="currency">${formatter.format(
               step.remainingBefore
             )}</span></li>`;
-
             if (step.isFinalStep) {
               html += `<li>This bracket covers the rest.</li>`;
               html += `<li>Pre-tax needed here: <span class="currency">${formatter.format(
@@ -495,11 +445,12 @@
         return html;
       }
 
-      // --- Function to Display Current Brackets ---
+      // --- Display Current Brackets Function (displayCurrentBrackets - unchanged from previous version) ---
+      // function displayCurrentBrackets(system, formatter) { ... }
+      // (Keep the function definition from the previous step exactly the same)
       function displayCurrentBrackets(system, formatter) {
         const bracketListElement = document.getElementById("bracketList");
         if (!bracketListElement || !system || !system.brackets) return;
-
         let listHtml = "";
         let previousLimit = 0;
         system.brackets.forEach((bracket) => {
@@ -531,11 +482,11 @@
         const errorElement = document.getElementById("error");
         const detailsSection = document.getElementById("detailsSection");
         const stepsElement = document.getElementById("calculationSteps");
-        const taxSystemSelect = document.getElementById("taxSystemSelect"); // Dropdown
+        const taxSystemSelect = document.getElementById("taxSystemSelect");
         const inputCurrencySymbol = document.getElementById(
           "inputCurrencySymbol"
-        ); // Span for currency symbol
-        const bracketListElement = document.getElementById("bracketList"); // UL for displaying brackets
+        );
+        const bracketListElement = document.getElementById("bracketList");
 
         if (
           !inputElement ||
@@ -548,108 +499,165 @@
           !inputCurrencySymbol ||
           !bracketListElement
         ) {
-          console.error(
-            "Initialization Error: One or more HTML elements not found!"
-          );
-          alert(
-            "Error initializing the calculator. Essential elements missing. Check console (F12)."
-          );
+          console.error("Initialization Error: Elements missing!");
+          alert("Initialization Error.");
           return;
         } else {
-          console.log("Elements found successfully.");
+          console.log("Elements found.");
         }
 
         // --- Function to update UI based on dropdown selection ---
         function updateUIForSelectedSystem() {
           const selectedSystemKey = taxSystemSelect.value;
           const selectedSystem = taxBracketSystems[selectedSystemKey];
-          if (!selectedSystem) {
-            console.error(
-              "Selected system not found in data:",
-              selectedSystemKey
-            );
-            return;
-          }
+          if (!selectedSystem) return;
 
-          // Update currency symbol and formatter
           inputCurrencySymbol.textContent = selectedSystem.currency;
-          updateFormatter(selectedSystem.currency);
+          updateFormatters(selectedSystem.currency, selectedSystem.locale); // Update BOTH formatters
 
-          // Update placeholder text (optional)
           const exampleValue =
             selectedSystem.currency === "IDR" ? "100000000" : "50000";
-          inputElement.placeholder = `e.g., ${exampleValue}`;
+          // Use the input formatter for the placeholder
+          inputElement.placeholder = `e.g., ${currentInputFormatter.format(
+            exampleValue
+          )}`;
 
-          // Update the displayed bracket list
-          displayCurrentBrackets(selectedSystem, currentFormatter);
+          displayCurrentBrackets(selectedSystem, currentResultFormatter); // Display brackets using result formatter
 
-          // Clear previous results when system changes
+          // Clear previous results and *reformat* input if needed
           resultElement.textContent = "";
           errorElement.textContent = "";
           stepsElement.innerHTML = "";
+          formatInputAndUpdateCursor(inputElement); // Reformat existing input value with new locale
         }
+
+        // --- INPUT FORMATTING LOGIC ---
+        function formatInputAndUpdateCursor(input) {
+          const originalValue = input.value;
+          const originalCursorPos = input.selectionStart;
+
+          // 1. Clean the value (remove non-digits)
+          const cleanValue = originalValue.replace(/[^0-9]/g, "");
+
+          // Count digits before cursor in original *unformatted* string
+          let originalDigitsBeforeCursor = 0;
+          for (let i = 0; i < originalCursorPos; i++) {
+            if (/[0-9]/.test(originalValue[i])) {
+              originalDigitsBeforeCursor++;
+            }
+          }
+
+          // Handle empty input
+          if (cleanValue === "") {
+            input.value = "";
+            return;
+          }
+
+          // 2. Format the clean value using the *input* formatter
+          let formattedValue;
+          try {
+            // Use BigInt if numbers might exceed safe integer limits, otherwise Number/parseInt is fine
+            // For typical incomes, Number should be okay. Add check if needed.
+            formattedValue = currentInputFormatter.format(Number(cleanValue));
+          } catch (e) {
+            console.error("Error formatting input value:", e);
+            // Fallback or keep original value? Keep original for now.
+            input.value = originalValue;
+            // Try to restore cursor roughly
+            input.setSelectionRange(originalCursorPos, originalCursorPos);
+            return;
+          }
+
+          // 3. Update the input value
+          input.value = formattedValue;
+
+          // 4. Calculate new cursor position
+          let newCursorPos = 0;
+          let digitsCounted = 0;
+          for (let i = 0; i < formattedValue.length; i++) {
+            if (digitsCounted === originalDigitsBeforeCursor) {
+              newCursorPos = i;
+              break; // Found position after the last relevant digit
+            }
+            if (/[0-9]/.test(formattedValue[i])) {
+              digitsCounted++;
+            }
+            // If loop finishes, cursor should be at the end
+            if (i === formattedValue.length - 1) {
+              newCursorPos = formattedValue.length;
+            }
+          }
+
+          // Adjust cursor if it lands right before a separator it should be after
+          // E.g., typing '1' in '1.234' -> '11.234', cursor should be after the second '1'.
+          // If the character *at* the new calculated position is NOT a digit, and the character *before* it IS a digit,
+          // and we are not at the very beginning, it might mean we landed before a newly inserted separator.
+          // This logic might need refinement based on edge cases. Let's stick to the digit count for now.
+
+          // Set the new cursor position
+          input.setSelectionRange(newCursorPos, newCursorPos);
+        }
+
+        // --- Event Listener for Input Formatting ---
+        inputElement.addEventListener("input", (event) => {
+          formatInputAndUpdateCursor(event.target);
+        });
 
         // --- Event Listener for Dropdown Change ---
         taxSystemSelect.addEventListener("change", updateUIForSelectedSystem);
 
-        // --- Initial UI Setup based on default dropdown value ---
+        // --- Initial UI Setup ---
         updateUIForSelectedSystem();
 
-        // --- Button Click Handler ---
+        // --- Button Click Handler (Ensure it parses formatted value correctly) ---
         buttonElement.addEventListener("click", () => {
           console.log("Calculate button clicked.");
+          // ... (rest of the click handler is identical to previous version) ...
+          // Important: The parsing logic inside MUST handle the formatted string
           try {
-            // Clear previous results/errors/steps
             resultElement.textContent = "";
             errorElement.textContent = "";
             stepsElement.innerHTML = "";
-
-            // Get selected system
             const selectedSystemKey = taxSystemSelect.value;
             const selectedSystem = taxBracketSystems[selectedSystemKey];
             if (!selectedSystem) {
-              errorElement.textContent = "Invalid tax system selected.";
+              errorElement.textContent = "Invalid system.";
               return;
             }
+            updateFormatters(selectedSystem.currency, selectedSystem.locale); // Ensure formatters match
 
-            // Ensure formatter matches current selection (redundant if change listener works, but safe)
-            updateFormatter(selectedSystem.currency);
+            // Critical: Parse the formatted input value by removing non-digits
+            const rawInputValue = inputElement.value;
+            const cleanNumericString = rawInputValue.replace(/[^0-9]/g, ""); // Remove separators etc.
 
-            // Get and parse input value
-            const inputValue = inputElement.value.replace(/[^0-9.]/g, ""); // Allow decimal for USD if needed? For now, stick to integer-like stripping
-            if (inputValue === "") {
-              errorElement.textContent =
-                "Please enter a target after-tax income.";
+            if (cleanNumericString === "") {
+              errorElement.textContent = "Please enter income.";
               return;
             }
-            const targetIncome = parseFloat(inputValue.replace(/,/g, "")); // Remove commas just in case
+            const targetIncome = parseFloat(cleanNumericString); // Parse the cleaned string
 
-            // Initial input validation
             if (
               isNaN(targetIncome) ||
               targetIncome < 0 ||
               !isFinite(targetIncome)
             ) {
-              errorElement.textContent =
-                "Invalid input: Please enter a valid non-negative number.";
+              errorElement.textContent = "Invalid number input.";
               return;
             }
 
-            // --- Call Calculation Function ---
             console.log(
-              `Calling calculatePreTaxIncome for ${selectedSystem.name} with:`,
+              `Calling calc for ${selectedSystem.name} with:`,
               targetIncome
             );
             const calculationResult = calculatePreTaxIncome(
               targetIncome,
               selectedSystem
             );
-            console.log("Calculation result object:", calculationResult);
+            console.log("Result object:", calculationResult);
 
-            // --- Display Result or Error ---
             if (isNaN(calculationResult.result)) {
               errorElement.textContent =
-                calculationResult.error || "Calculation error occurred.";
+                calculationResult.error || "Calculation error.";
               if (
                 calculationResult.steps &&
                 calculationResult.steps.length > 1
@@ -657,33 +665,28 @@
                 stepsElement.innerHTML = formatCalculationSteps(
                   calculationResult.steps,
                   targetIncome,
-                  currentFormatter
+                  currentResultFormatter
                 );
                 detailsSection.open = true;
               }
             } else {
-              // Display formatted final result
-              resultElement.textContent = `Required Pre-Tax Income: ${currentFormatter.format(
+              resultElement.textContent = `Required Pre-Tax Income: ${currentResultFormatter.format(
                 calculationResult.result
               )}`;
-              // Generate and display steps HTML
               stepsElement.innerHTML = formatCalculationSteps(
                 calculationResult.steps,
                 targetIncome,
-                currentFormatter
+                currentResultFormatter
               );
-              detailsSection.open = true; // Open details on success
+              detailsSection.open = true;
             }
           } catch (error) {
-            console.error(
-              "Unexpected error during calculation or display:",
-              error
-            );
+            console.error("Unexpected error:", error);
             errorElement.textContent =
-              "An unexpected error occurred. Please check the console (F12).";
-            stepsElement.innerHTML = ""; // Clear steps on unexpected error
+              "Unexpected error occurred. Check console.";
+            stepsElement.innerHTML = "";
           }
-        }); // End button click listener
+        }); // End button click
 
         // --- Enter Key Listener ---
         inputElement.addEventListener("keypress", function (event) {
@@ -692,7 +695,7 @@
             buttonElement.click();
           }
         });
-      }); // End DOMContentLoaded listener
+      }); // End DOMContentLoaded
     </script>
   </body>
 </html>
