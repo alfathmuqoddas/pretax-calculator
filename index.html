@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -20,6 +20,8 @@
       content="https://alfathmuqoddas.github.io/pretax-calculator"
     />
     <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="https://fav.farm/💲" />
 
     <style>
       /* Styles are largely the same, maybe ensure input alignment */
@@ -103,6 +105,10 @@
         font-size: 0.9em;
         margin-bottom: 15px;
       }
+
+      .disclaimer ul {
+        padding-left: 20px;
+      }
       details {
         margin-top: 25px;
         font-size: 0.9em;
@@ -152,23 +158,39 @@
         font-weight: normal;
         color: #555;
       }
+
+      @media only screen and (max-width: 600px) {
+        body {
+          background-color: white;
+          padding: 16px;
+          margin: 0;
+        }
+
+        .container {
+          border: none;
+          padding: 0 16px;
+          box-shadow: none;
+          margin: 0 auto;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <h1>Pre-tax Calculator</h1>
       <p>
-        Select a tax system, enter your desired income *after* taxes (numbers
-        will be formatted automatically), and calculate the required *pre-tax*
-        income.
+        Tools to calculate the pre-tax income required to generate a certain
+        amount of after-tax income. Select a tax system, enter your desired
+        income after taxes (numbers will be formatted automatically), and
+        calculate the required pre-tax income.
       </p>
 
       <div class="disclaimer">
         <strong>Important Notes:</strong>
         <ul>
           <li>
-            This tool provides an estimate based *only* on the progressive tax
-            rates shown.
+            This tool provides an estimate based <b>only</b> on the progressive
+            tax rates shown.
           </li>
           <li>
             <strong>It ignores</strong> deductions (standard/itemized), credits,
@@ -176,8 +198,9 @@
             other complexities.
           </li>
           <li>
-            US rates shown are for **Federal Income Tax, Single Filer, 2024**.
-            Tax laws change; verify with official sources.
+            US rates shown are for
+            <em>Federal Income Tax, Single Filer, 2024</em>. Tax laws change;
+            verify with official sources.
           </li>
         </ul>
       </div>
@@ -288,7 +311,7 @@
       // (Keep the function definition from the previous step exactly the same)
       function calculatePreTaxIncome(
         targetAfterTaxIncome,
-        selectedBracketSystem
+        selectedBracketSystem,
       ) {
         const calculationSteps = [];
         const functionStartTime = Date.now();
@@ -378,7 +401,7 @@
         }
         console.error(
           "Calc Error: Loop finished unexpectedly.",
-          remainingAfterTax
+          remainingAfterTax,
         );
         calculationSteps.push({
           type: "error",
@@ -399,7 +422,7 @@
         const startStep = steps.find((s) => s.type === "start");
         const systemName = startStep ? startStep.system : "Selected System";
         let html = `<h4>Calculation Breakdown (${systemName} - Target: ${formatter.format(
-          targetAfterTaxIncome
+          targetAfterTaxIncome,
         )} After Tax):</h4><ul>`;
         let currentCumulativePreTax = 0;
         steps.forEach((step) => {
@@ -426,32 +449,32 @@
               (step.rate * 100).toFixed(1).replace(/\.0$/, "") + "%";
             html += `<li><strong>Bracket ${step.bracketIndex} (${bracketDesc} @ <span class="rate-percent">${ratePercent}</span>):</strong><ul>`;
             html += `<li>After-tax needed at start: <span class="currency">${formatter.format(
-              step.remainingBefore
+              step.remainingBefore,
             )}</span></li>`;
             if (step.isFinalStep) {
               html += `<li>This bracket covers the rest.</li>`;
               html += `<li>Pre-tax needed here: <span class="currency">${formatter.format(
-                step.remainingBefore
+                step.remainingBefore,
               )}</span> / (1 - ${
                 step.rate
               }) = <span class="currency">${formatter.format(
-                step.preTaxAdded
+                step.preTaxAdded,
               )}</span></li>`;
               html += `<li>Final Cumulative Pre-tax: <span class="currency">${formatter.format(
-                step.cumulativePreTax
+                step.cumulativePreTax,
               )}</span></li>`;
             } else {
               html += `<li>Full pre-tax bracket range (<span class="currency">${formatter.format(
-                step.preTaxAdded
+                step.preTaxAdded,
               )}</span>) used.</li>`;
               html += `<li>Net contribution from this bracket: <span class="currency">${formatter.format(
-                step.netContributionUsed
+                step.netContributionUsed,
               )}</span></li>`;
               html += `<li>Remaining after-tax needed: <span class="currency">${formatter.format(
-                step.remainingAfter
+                step.remainingAfter,
               )}</span></li>`;
               html += `<li>Cumulative Pre-tax so far: <span class="currency">${formatter.format(
-                step.cumulativePreTax
+                step.cumulativePreTax,
               )}</span></li>`;
             }
             html += `</ul></li>`;
@@ -492,7 +515,7 @@
 
         // --- Get Elements ---
         const inputElement = document.getElementById(
-          "targetAfterTaxIncomeInput"
+          "targetAfterTaxIncomeInput",
         );
         const buttonElement = document.getElementById("calculateButton");
         const resultElement = document.getElementById("result");
@@ -501,7 +524,7 @@
         const stepsElement = document.getElementById("calculationSteps");
         const taxSystemSelect = document.getElementById("taxSystemSelect");
         const inputCurrencySymbol = document.getElementById(
-          "inputCurrencySymbol"
+          "inputCurrencySymbol",
         );
         const bracketListElement = document.getElementById("bracketList");
 
@@ -536,7 +559,7 @@
             selectedSystem.currency === "IDR" ? "100000000" : "50000";
           // Use the input formatter for the placeholder
           inputElement.placeholder = `e.g., ${currentInputFormatter.format(
-            exampleValue
+            exampleValue,
           )}`;
 
           displayCurrentBrackets(selectedSystem, currentResultFormatter); // Display brackets using result formatter
@@ -664,11 +687,11 @@
 
             console.log(
               `Calling calc for ${selectedSystem.name} with:`,
-              targetIncome
+              targetIncome,
             );
             const calculationResult = calculatePreTaxIncome(
               targetIncome,
-              selectedSystem
+              selectedSystem,
             );
             console.log("Result object:", calculationResult);
 
@@ -682,18 +705,18 @@
                 stepsElement.innerHTML = formatCalculationSteps(
                   calculationResult.steps,
                   targetIncome,
-                  currentResultFormatter
+                  currentResultFormatter,
                 );
                 detailsSection.open = true;
               }
             } else {
               resultElement.textContent = `Required Pre-Tax Income: ${currentResultFormatter.format(
-                calculationResult.result
+                calculationResult.result,
               )}`;
               stepsElement.innerHTML = formatCalculationSteps(
                 calculationResult.steps,
                 targetIncome,
-                currentResultFormatter
+                currentResultFormatter,
               );
               detailsSection.open = true;
             }
