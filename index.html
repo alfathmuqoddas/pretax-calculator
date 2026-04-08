@@ -175,6 +175,7 @@
       }
     </style>
   </head>
+
   <body>
     <div class="container">
       <h1>Pre-tax Calculator</h1>
@@ -209,6 +210,9 @@
         <label for="taxSystemSelect">Select Tax System:</label>
         <select id="taxSystemSelect">
           <option value="ID">Indonesia (PPh 21 - Personal)</option>
+          <option value="ID_NPPN">
+            Indonesia (PPh 21 - Freelance NPPN 50%)
+          </option>
           <option value="US">USA (Federal - Single Filer 2024)</option>
         </select>
       </div>
@@ -239,6 +243,7 @@
         <div id="calculationSteps"></div>
         <div id="currentBracketsDisplay">
           <h4>Tax Brackets Used (Reference):</h4>
+          <div id="bracketExplainer"></div>
           <ul id="bracketList"></ul>
         </div>
       </details>
@@ -247,12 +252,27 @@
     <script>
       console.log("Script tag executing...");
 
-      // --- Tax System Data (same as before) ---
+      // --- Tax System Data ---
       const taxBracketSystems = {
         ID: {
           name: "Indonesia (PPh 21 - Personal)",
           currency: "IDR",
           locale: "id-ID",
+          brackets: [
+            { limit: 60000000, rate: 0.05 },
+            { limit: 250000000, rate: 0.15 },
+            { limit: 500000000, rate: 0.25 },
+            { limit: 5000000000, rate: 0.3 },
+            { limit: Infinity, rate: 0.35 },
+          ],
+        },
+        ID_NPPN: {
+          name: "Indonesia (PPh 21 - Freelance NPPN 50%)",
+          currency: "IDR",
+          locale: "id-ID",
+          isNPPN: true, // Flag for custom logic
+          nppnRate: 0.5, // 50% deduction
+          maxGross: 4800000000, // Rp 4.8 Billion limit
           brackets: [
             { limit: 60000000, rate: 0.05 },
             { limit: 250000000, rate: 0.15 },
@@ -278,19 +298,16 @@
       };
 
       // --- Formatters ---
-      // For displaying final currency results and steps
       let currentResultFormatter = new Intl.NumberFormat("id-ID", {
         style: "currency",
         currency: "IDR",
       });
-      // For formatting the input field value (no currency, no decimals)
       let currentInputFormatter = new Intl.NumberFormat("id-ID", {
         style: "decimal",
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
       });
 
-      // Function to update formatters based on selection
       function updateFormatters(currencyCode, locale) {
         currentResultFormatter = new Intl.NumberFormat(locale, {
           style: "currency",
@@ -303,19 +320,27 @@
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         });
-        console.log(`Formatters updated for ${currencyCode} (${locale})`);
       }
 
-      // --- Calculation Function (calculatePreTaxIncome - unchanged from previous version) ---
-      // function calculatePreTaxIncome(targetAfterTaxIncome, selectedBracketSystem) { ... }
-      // (Keep the function definition from the previous step exactly the same)
+      // --- Calculation Function ---
       function calculatePreTaxIncome(
         targetAfterTaxIncome,
         selectedBracketSystem,
       ) {
         const calculationSteps = [];
-        const functionStartTime = Date.now();
-        const brackets = selectedBracketSystem.brackets;
+
+        // Handle NPPN Effective Brackets mapping
+        let brackets = selectedBracketSystem.brackets;
+        if (selectedBracketSystem.isNPPN) {
+          brackets = brackets.map((b) => ({
+            limit:
+              b.limit === Infinity
+                ? Infinity
+                : b.limit / selectedBracketSystem.nppnRate,
+            rate: b.rate * selectedBracketSystem.nppnRate,
+          }));
+        }
+
         if (!brackets || brackets.length === 0)
           return { result: NaN, steps: [], error: "No brackets defined." };
         if (
@@ -324,18 +349,23 @@
           !isFinite(targetAfterTaxIncome)
         )
           return { result: NaN, steps: [], error: "Invalid input." };
+
         calculationSteps.push({
           type: "start",
           target: targetAfterTaxIncome,
           system: selectedBracketSystem.name,
+          isNPPN: selectedBracketSystem.isNPPN,
         });
+
         if (targetAfterTaxIncome === 0) {
           calculationSteps.push({ type: "result", preTax: 0 });
           return { result: 0, steps: calculationSteps };
         }
+
         let preTaxIncome = 0,
           previousLimit = 0,
           remainingAfterTax = targetAfterTaxIncome;
+
         for (let i = 0; i < brackets.length; i++) {
           const bracket = brackets[i];
           const { limit, rate } = bracket;
@@ -348,6 +378,7 @@
               steps: calculationSteps,
               error: `Invalid rate (${rate * 100}%)`,
             };
+
           const bracketNetContribution =
             limit === Infinity ? Infinity : bracketRange * netRate;
           const stepData = {
@@ -359,28 +390,32 @@
             netRate,
             remainingBefore: remainingAfterTax,
           };
+
           if (
             remainingAfterTax <= bracketNetContribution + 1e-9 ||
             limit === Infinity
           ) {
             const preTaxNeededInThisBracket = remainingAfterTax / netRate;
+            preTaxIncome += preTaxNeededInThisBracket;
+
+            // Enforce Maximum Gross limit for NPPN
             if (
-              !isFinite(preTaxNeededInThisBracket) ||
-              preTaxNeededInThisBracket < 0
-            )
+              selectedBracketSystem.isNPPN &&
+              preTaxIncome > selectedBracketSystem.maxGross
+            ) {
               return {
                 result: NaN,
                 steps: calculationSteps,
-                error: "Calc error final bracket.",
+                error: `Calculated Gross Income (${currentResultFormatter.format(preTaxIncome)}) exceeds the Rp 4.8 Billion maximum limit for NPPN.`,
               };
-            preTaxIncome += preTaxNeededInThisBracket;
+            }
+
             stepData.isFinalStep = true;
             stepData.preTaxAdded = preTaxNeededInThisBracket;
             stepData.remainingAfter = 0;
             stepData.cumulativePreTax = preTaxIncome;
             calculationSteps.push(stepData);
             calculationSteps.push({ type: "result", preTax: preTaxIncome });
-            console.log(`Calc took ${Date.now() - functionStartTime}ms`);
             return { result: preTaxIncome, steps: calculationSteps };
           } else {
             preTaxIncome += bracketRange;
@@ -392,21 +427,8 @@
             stepData.cumulativePreTax = preTaxIncome;
             calculationSteps.push(stepData);
             previousLimit = limit;
-            if (remainingAfterTax < -1e-9)
-              calculationSteps.push({
-                type: "warning",
-                message: "Remaining negative (precision).",
-              });
           }
         }
-        console.error(
-          "Calc Error: Loop finished unexpectedly.",
-          remainingAfterTax,
-        );
-        calculationSteps.push({
-          type: "error",
-          message: "Loop finished unexpectedly.",
-        });
         return {
           result: NaN,
           steps: calculationSteps,
@@ -414,23 +436,24 @@
         };
       }
 
-      // --- Format Steps Function (formatCalculationSteps - unchanged from previous version) ---
-      // function formatCalculationSteps(steps, targetAfterTaxIncome, formatter) { ... }
-      // (Keep the function definition from the previous step exactly the same)
+      // --- Format Steps Function ---
       function formatCalculationSteps(steps, targetAfterTaxIncome, formatter) {
         if (!steps || steps.length === 0) return "";
         const startStep = steps.find((s) => s.type === "start");
         const systemName = startStep ? startStep.system : "Selected System";
-        let html = `<h4>Calculation Breakdown (${systemName} - Target: ${formatter.format(
-          targetAfterTaxIncome,
-        )} After Tax):</h4><ul>`;
+        let html = `<h4>Calculation Breakdown (${systemName} - Target: ${formatter.format(targetAfterTaxIncome)} After Tax):</h4>`;
+
+        if (startStep && startStep.isNPPN) {
+          html += `<p style="font-size: 0.9em; color: #555;"><em>Note: The brackets below reflect the <strong>Gross Income equivalents</strong>. The limits are doubled and tax rates are halved to account for the 50% NPPN base deduction.</em></p>`;
+        }
+
+        html += `<ul>`;
         let currentCumulativePreTax = 0;
+
         steps.forEach((step) => {
           if (step.type === "start" || step.type === "result") return;
           if (step.type === "warning" || step.type === "error") {
-            html += `<li style="color: orange;"><strong>${step.type.toUpperCase()}:</strong> ${
-              step.message
-            }</li>`;
+            html += `<li style="color: orange;"><strong>${step.type.toUpperCase()}:</strong> ${step.message}</li>`;
             return;
           }
           if (step.type === "bracket_calculation") {
@@ -448,34 +471,17 @@
             const ratePercent =
               (step.rate * 100).toFixed(1).replace(/\.0$/, "") + "%";
             html += `<li><strong>Bracket ${step.bracketIndex} (${bracketDesc} @ <span class="rate-percent">${ratePercent}</span>):</strong><ul>`;
-            html += `<li>After-tax needed at start: <span class="currency">${formatter.format(
-              step.remainingBefore,
-            )}</span></li>`;
+            html += `<li>After-tax needed at start: <span class="currency">${formatter.format(step.remainingBefore)}</span></li>`;
+
             if (step.isFinalStep) {
               html += `<li>This bracket covers the rest.</li>`;
-              html += `<li>Pre-tax needed here: <span class="currency">${formatter.format(
-                step.remainingBefore,
-              )}</span> / (1 - ${
-                step.rate
-              }) = <span class="currency">${formatter.format(
-                step.preTaxAdded,
-              )}</span></li>`;
-              html += `<li>Final Cumulative Pre-tax: <span class="currency">${formatter.format(
-                step.cumulativePreTax,
-              )}</span></li>`;
+              html += `<li>Pre-tax needed here: <span class="currency">${formatter.format(step.remainingBefore)}</span> / (1 - ${step.rate}) = <span class="currency">${formatter.format(step.preTaxAdded)}</span></li>`;
+              html += `<li>Final Cumulative Pre-tax: <span class="currency">${formatter.format(step.cumulativePreTax)}</span></li>`;
             } else {
-              html += `<li>Full pre-tax bracket range (<span class="currency">${formatter.format(
-                step.preTaxAdded,
-              )}</span>) used.</li>`;
-              html += `<li>Net contribution from this bracket: <span class="currency">${formatter.format(
-                step.netContributionUsed,
-              )}</span></li>`;
-              html += `<li>Remaining after-tax needed: <span class="currency">${formatter.format(
-                step.remainingAfter,
-              )}</span></li>`;
-              html += `<li>Cumulative Pre-tax so far: <span class="currency">${formatter.format(
-                step.cumulativePreTax,
-              )}</span></li>`;
+              html += `<li>Full pre-tax bracket range (<span class="currency">${formatter.format(step.preTaxAdded)}</span>) used.</li>`;
+              html += `<li>Net contribution from this bracket: <span class="currency">${formatter.format(step.netContributionUsed)}</span></li>`;
+              html += `<li>Remaining after-tax needed: <span class="currency">${formatter.format(step.remainingAfter)}</span></li>`;
+              html += `<li>Cumulative Pre-tax so far: <span class="currency">${formatter.format(step.cumulativePreTax)}</span></li>`;
             }
             html += `</ul></li>`;
             currentCumulativePreTax = step.cumulativePreTax;
@@ -485,15 +491,31 @@
         return html;
       }
 
-      // --- Display Current Brackets Function (displayCurrentBrackets - unchanged from previous version) ---
-      // function displayCurrentBrackets(system, formatter) { ... }
-      // (Keep the function definition from the previous step exactly the same)
+      // --- Display Current Brackets Function ---
       function displayCurrentBrackets(system, formatter) {
         const bracketListElement = document.getElementById("bracketList");
+        const explainerElement = document.getElementById("bracketExplainer");
         if (!bracketListElement || !system || !system.brackets) return;
+
         let listHtml = "";
+
+        // Show effective brackets for NPPN visually
+        if (system.isNPPN) {
+          explainerElement.innerHTML = `<p style="font-size: 0.9em; color: #555;"><em>Note: Because NPPN taxes 50% of your gross income, the limits below are converted to <strong>Gross Income Equivalents</strong> (limit &times; 2) and effective rates (rate &divide; 2) for easier math processing.</em></p>`;
+        } else {
+          explainerElement.innerHTML = "";
+        }
+
+        let bracketsToDisplay = system.isNPPN
+          ? system.brackets.map((b) => ({
+              limit:
+                b.limit === Infinity ? Infinity : b.limit / system.nppnRate,
+              rate: b.rate * system.nppnRate,
+            }))
+          : system.brackets;
+
         let previousLimit = 0;
-        system.brackets.forEach((bracket) => {
+        bracketsToDisplay.forEach((bracket) => {
           const lowerDisplay = formatter
             .format(previousLimit + (previousLimit === 0 ? 0 : 0.01))
             .replace(/\.00$/, "");
@@ -511,9 +533,6 @@
 
       // --- Wait for the DOM ---
       document.addEventListener("DOMContentLoaded", function () {
-        console.log("DOM fully loaded and parsed.");
-
-        // --- Get Elements ---
         const inputElement = document.getElementById(
           "targetAfterTaxIncomeInput",
         );
@@ -526,156 +545,92 @@
         const inputCurrencySymbol = document.getElementById(
           "inputCurrencySymbol",
         );
-        const bracketListElement = document.getElementById("bracketList");
 
-        if (
-          !inputElement ||
-          !buttonElement ||
-          !resultElement ||
-          !errorElement ||
-          !stepsElement ||
-          !detailsSection ||
-          !taxSystemSelect ||
-          !inputCurrencySymbol ||
-          !bracketListElement
-        ) {
-          console.error("Initialization Error: Elements missing!");
-          alert("Initialization Error.");
-          return;
-        } else {
-          console.log("Elements found.");
-        }
-
-        // --- Function to update UI based on dropdown selection ---
         function updateUIForSelectedSystem() {
           const selectedSystemKey = taxSystemSelect.value;
           const selectedSystem = taxBracketSystems[selectedSystemKey];
           if (!selectedSystem) return;
 
           inputCurrencySymbol.textContent = selectedSystem.currency;
-          updateFormatters(selectedSystem.currency, selectedSystem.locale); // Update BOTH formatters
+          updateFormatters(selectedSystem.currency, selectedSystem.locale);
 
           const exampleValue =
             selectedSystem.currency === "IDR" ? "100000000" : "50000";
-          // Use the input formatter for the placeholder
-          inputElement.placeholder = `e.g., ${currentInputFormatter.format(
-            exampleValue,
-          )}`;
+          inputElement.placeholder = `e.g., ${currentInputFormatter.format(exampleValue)}`;
 
-          displayCurrentBrackets(selectedSystem, currentResultFormatter); // Display brackets using result formatter
+          displayCurrentBrackets(selectedSystem, currentResultFormatter);
 
-          // Clear previous results and *reformat* input if needed
           resultElement.textContent = "";
           errorElement.textContent = "";
           stepsElement.innerHTML = "";
-          formatInputAndUpdateCursor(inputElement); // Reformat existing input value with new locale
+          formatInputAndUpdateCursor(inputElement);
         }
 
-        // --- INPUT FORMATTING LOGIC ---
         function formatInputAndUpdateCursor(input) {
           const originalValue = input.value;
           const originalCursorPos = input.selectionStart;
-
-          // 1. Clean the value (remove non-digits)
           const cleanValue = originalValue.replace(/[^0-9]/g, "");
 
-          // Count digits before cursor in original *unformatted* string
           let originalDigitsBeforeCursor = 0;
           for (let i = 0; i < originalCursorPos; i++) {
-            if (/[0-9]/.test(originalValue[i])) {
-              originalDigitsBeforeCursor++;
-            }
+            if (/[0-9]/.test(originalValue[i])) originalDigitsBeforeCursor++;
           }
 
-          // Handle empty input
           if (cleanValue === "") {
             input.value = "";
             return;
           }
 
-          // 2. Format the clean value using the *input* formatter
           let formattedValue;
           try {
-            // Use BigInt if numbers might exceed safe integer limits, otherwise Number/parseInt is fine
-            // For typical incomes, Number should be okay. Add check if needed.
             formattedValue = currentInputFormatter.format(Number(cleanValue));
           } catch (e) {
-            console.error("Error formatting input value:", e);
-            // Fallback or keep original value? Keep original for now.
             input.value = originalValue;
-            // Try to restore cursor roughly
             input.setSelectionRange(originalCursorPos, originalCursorPos);
             return;
           }
 
-          // 3. Update the input value
           input.value = formattedValue;
+          let newCursorPos = 0,
+            digitsCounted = 0;
 
-          // 4. Calculate new cursor position
-          let newCursorPos = 0;
-          let digitsCounted = 0;
           for (let i = 0; i < formattedValue.length; i++) {
             if (digitsCounted === originalDigitsBeforeCursor) {
               newCursorPos = i;
-              break; // Found position after the last relevant digit
+              break;
             }
-            if (/[0-9]/.test(formattedValue[i])) {
-              digitsCounted++;
-            }
-            // If loop finishes, cursor should be at the end
-            if (i === formattedValue.length - 1) {
+            if (/[0-9]/.test(formattedValue[i])) digitsCounted++;
+            if (i === formattedValue.length - 1)
               newCursorPos = formattedValue.length;
-            }
           }
-
-          // Adjust cursor if it lands right before a separator it should be after
-          // E.g., typing '1' in '1.234' -> '11.234', cursor should be after the second '1'.
-          // If the character *at* the new calculated position is NOT a digit, and the character *before* it IS a digit,
-          // and we are not at the very beginning, it might mean we landed before a newly inserted separator.
-          // This logic might need refinement based on edge cases. Let's stick to the digit count for now.
-
-          // Set the new cursor position
           input.setSelectionRange(newCursorPos, newCursorPos);
         }
 
-        // --- Event Listener for Input Formatting ---
-        inputElement.addEventListener("input", (event) => {
-          formatInputAndUpdateCursor(event.target);
-        });
-
-        // --- Event Listener for Dropdown Change ---
+        inputElement.addEventListener("input", (event) =>
+          formatInputAndUpdateCursor(event.target),
+        );
         taxSystemSelect.addEventListener("change", updateUIForSelectedSystem);
-
-        // --- Initial UI Setup ---
         updateUIForSelectedSystem();
 
-        // --- Button Click Handler (Ensure it parses formatted value correctly) ---
         buttonElement.addEventListener("click", () => {
-          console.log("Calculate button clicked.");
-          // ... (rest of the click handler is identical to previous version) ...
-          // Important: The parsing logic inside MUST handle the formatted string
           try {
             resultElement.textContent = "";
             errorElement.textContent = "";
             stepsElement.innerHTML = "";
             const selectedSystemKey = taxSystemSelect.value;
             const selectedSystem = taxBracketSystems[selectedSystemKey];
-            if (!selectedSystem) {
-              errorElement.textContent = "Invalid system.";
-              return;
-            }
-            updateFormatters(selectedSystem.currency, selectedSystem.locale); // Ensure formatters match
+            if (!selectedSystem) return;
 
-            // Critical: Parse the formatted input value by removing non-digits
+            updateFormatters(selectedSystem.currency, selectedSystem.locale);
+
             const rawInputValue = inputElement.value;
-            const cleanNumericString = rawInputValue.replace(/[^0-9]/g, ""); // Remove separators etc.
-
+            const cleanNumericString = rawInputValue.replace(/[^0-9]/g, "");
             if (cleanNumericString === "") {
               errorElement.textContent = "Please enter income.";
               return;
             }
-            const targetIncome = parseFloat(cleanNumericString); // Parse the cleaned string
 
+            const targetIncome = parseFloat(cleanNumericString);
             if (
               isNaN(targetIncome) ||
               targetIncome < 0 ||
@@ -685,15 +640,10 @@
               return;
             }
 
-            console.log(
-              `Calling calc for ${selectedSystem.name} with:`,
-              targetIncome,
-            );
             const calculationResult = calculatePreTaxIncome(
               targetIncome,
               selectedSystem,
             );
-            console.log("Result object:", calculationResult);
 
             if (isNaN(calculationResult.result)) {
               errorElement.textContent =
@@ -710,9 +660,7 @@
                 detailsSection.open = true;
               }
             } else {
-              resultElement.textContent = `Required Pre-Tax Income: ${currentResultFormatter.format(
-                calculationResult.result,
-              )}`;
+              resultElement.textContent = `Required Pre-Tax (Gross) Income: ${currentResultFormatter.format(calculationResult.result)}`;
               stepsElement.innerHTML = formatCalculationSteps(
                 calculationResult.steps,
                 targetIncome,
@@ -724,18 +672,16 @@
             console.error("Unexpected error:", error);
             errorElement.textContent =
               "Unexpected error occurred. Check console.";
-            stepsElement.innerHTML = "";
           }
-        }); // End button click
+        });
 
-        // --- Enter Key Listener ---
         inputElement.addEventListener("keypress", function (event) {
           if (event.key === "Enter") {
             event.preventDefault();
             buttonElement.click();
           }
         });
-      }); // End DOMContentLoaded
+      });
     </script>
   </body>
 </html>
